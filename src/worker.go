@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -44,7 +45,11 @@ func Worker(mapf func(string, string) []KeyValue,
 					map_write(&kv)
 				}
 			} else {
-
+				interData := reduce_read(&reply.File, current_worker.reduceAllocLen)
+				for k, v := range *interData {
+					res := reducef(k, v)
+					reduce_write(&k, &res)
+				}
 			}
 			task_complete_handler(reply.Ttype)
 		}
@@ -91,6 +96,28 @@ func map_write(kv *KeyValue) {
 	f, _ := os.OpenFile(midfile, os.O_APPEND|os.O_WRONLY, 0666)
 	f.WriteString(string(b) + "\n")
 	f.Close()
+}
+
+func reduce_write(k *string, res *string) {
+	f, _ := os.OpenFile(current_worker.out_file, os.O_APPEND|os.O_WRONLY, 0666)
+	f.WriteString(fmt.Sprintf("%v %v\n", *k, *res))
+	f.Close()
+}
+
+func reduce_read(rnum *string, nworker int) *map[string][]string {
+	m := make(map[string][]string)
+	for i := 0; i < nworker; i++ {
+		file := fmt.Sprintf("mr-%v-%v", i, *rnum)
+		ofile, _ := os.Open(file)
+		scanner := bufio.NewScanner(ofile)
+		var tmp KeyValue
+		for scanner.Scan() {
+			json.Unmarshal([]byte(scanner.Text()), &tmp)
+			m[tmp.Key] = append(m[tmp.Key], tmp.Value)
+		}
+		ofile.Close()
+	}
+	return &m
 }
 
 func ihash(key string) int {
