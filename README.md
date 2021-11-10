@@ -12,3 +12,6 @@ go run commons.go rpc.go controller.go ./input_files/pg-*.txt
 You can simulation distrubuted behaviour by creating several worker processes.
 You can run this command to create single worker:
 go run commons.go rpc.go worker.go
+
+Finally you will get N mr-out-(0:N) files, where N is number of started workers.
+You can see the word count results using: cat mr-out-* | sort | more 
