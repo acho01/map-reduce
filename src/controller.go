@@ -77,10 +77,56 @@ func (c *Controller) RegisterWorker(args *PlainArgs, reply *WorkerInitReply) err
 	return nil
 }
 
+func (c *Controller) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for i := range c.tasks {
+		t := &c.tasks[i]
+		if t.status == IDLE {
+			t.status = IN_PROGRESS
+			t.workerId = args.ID
+			reply.Ttype = t.ttype
+			reply.File = t.file
+			break
+		}
+	}
+
+	fmt.Println(c)
+	return nil
+}
+
+func (c *Controller) TaskComplete(args *TaskCompleteArgs, reply *PlainReply) error {
+	c.lock.Lock()
+	if args.Ttype == MAP {
+		c.mapLogLen++
+
+		// If all map tasks are done, procceed with reduce taks
+		if c.mapAllocLen == c.mapLogLen {
+			for i := 0; i < c.reduceAllocLen; i++ {
+				c.tasks = append(c.tasks, Task{-1, IDLE, REDUCE, fmt.Sprintf("%v", i)})
+			}
+		}
+	} else {
+		c.reduceLoglen++
+	}
+	c.lock.Unlock()
+
+	for i, _ := range c.tasks {
+		c.lock.Lock()
+		t := &c.tasks[i]
+		if t.status == IDLE && t.workerId == args.Id {
+			t.status = COMPLETED
+			c.lock.Unlock()
+			break
+		}
+		c.lock.Unlock()
+	}
+	return nil
+}
+
 func (c *Controller) server() {
 	rpc.Register(c)
 	rpc.HandleHTTP()
-	//l, e := net.Listen("tcp", ":1234")
 	sockname := coordinatorSock()
 	os.Remove(sockname)
 	l, e := net.Listen("unix", sockname)
